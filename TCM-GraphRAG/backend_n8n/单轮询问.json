@@ -1,0 +1,199 @@
+{
+  "name": "单轮询问",
+  "nodes": [
+    {
+      "parameters": {
+        "messages": {
+          "messageValues": [
+            {
+              "message": "你是一个极其严谨的 Neo4j Cypher 专家。你的唯一任务是将用户的自然语言中医问题翻译为 Cypher 查询语句。  【图谱 Schema 定义】 节点类型 (Nodes):      Prescription (方剂): 属性有 name(方剂名), description(描述)      Herb (药材): 属性有 name(药材名)      Usage (煎服法): 属性有 name, preparation(制法), method(用法), notes(备注)      Theory (理论): 属性有 description(理论描述)      Syndrome (证候): 属性有 name(证候名)      Method (治法): 属性有 name(治法名)  关系类型 (Relationships):      (Prescription)-[:CONTAINS]->(Herb)  // 方剂包含药材      (Prescription)-[:HAS_USAGE]->(Usage) // 方剂的煎服法      (Theory)-[:EXPLAINS_SYNDROME]->(Syndrome) // 理论解释证候      (Theory)-[:EXPLAINS_METHOD]->(Method) // 理论解释治法  【绝对执行的硬核规则】      只允许输出纯文本的 Cypher 语句，绝对不允许使用 Markdown 格式（严禁输出 cypher 和 ），也不要输出任何解释性废话。      只允许使用只读查询 (MATCH, RETURN)，严禁使用写入、修改或删除指令。      为了防止匹配失败，请始终使用模糊匹配 CONTAINS 而不是 =（例如 WHERE p.name CONTAINS '大青膏'）。      查询结果应该尽量全，例如查询方剂组成时，RETURN p.name, h.name。"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -272,
+        144
+      ],
+      "id": "0726750b-c074-44b8-8fc2-6c1b61f1ac1a",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.176.128:7474/db/neo4j/tx/commit",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"statements\": [\n    {\n      \"statement\": \"{{ $json.text }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        96,
+        144
+      ],
+      "id": "7538b16b-bccd-4e08-abea-2a6dadf3feb4",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "2wL4seN9LgI2ASNn",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=你是一位严谨专业的老中医。请严格根据以下从图谱数据库中检索到的事实数据，回答用户的提问。\n\n用户提问：{{ $('When chat message received').item.json.chatInput }}\n\n知识图谱返回的硬核数据：\n{{ JSON.stringify($('HTTP Request').item.json.results[0].data) }}\n\n绝对纪律：\n1. 必须且只能依据上述返回的数据进行回答，严禁擅自添加任何图谱中没有的药材或幻觉内容。\n2. 将生硬的 JSON 数组转化为通顺、专业、有条理的自然语言（清晰列出药材组成、制法、用法等）。\n3.可以使用联网搜索",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=你是一位严谨专业的老中医。请严格根据以下从图谱数据库中检索到的 JSON 格式事实数据，回答用户的提问。  用户提问：大青膏里面包含哪些药材？它的煎服方法是什么？  知识图谱返回的硬核数据： {{ JSON.stringify($json.results[0].data) }}  绝对纪律： 1. 必须且只能依据上述返回的数据进行回答，严禁擅自添加任何图谱中没有的药材或幻觉内容。 2. 将生硬的 JSON 数组转化为通顺、专业、有条理的自然语言（清晰列出药材组成、制法、用法和主治等）。"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        320,
+        128
+      ],
+      "id": "510c3e81-2daa-4dcf-847e-58b62abbd5d4",
+      "name": "Basic LLM Chain1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        336
+      ],
+      "id": "62157594-d240-4ea9-bd2f-a520cc3b0382",
+      "name": "DeepSeek Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "7MRdKdUVjH5JGvbm",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        320,
+        320
+      ],
+      "id": "54526be6-43da-4475-ac9d-a8bc4a009c20",
+      "name": "DeepSeek Chat Model1",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "7MRdKdUVjH5JGvbm",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "public": true,
+        "availableInChat": true,
+        "options": {
+          "responseMode": "lastNode"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -480,
+        144
+      ],
+      "id": "c2551d09-e19e-40fe-adee-c17d6bf0ec4e",
+      "name": "When chat message received",
+      "webhookId": "013d4c0c-6235-4c13-b3c6-abfb52f5537b"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "b16bab60-6c4c-4f97-8254-696ffff51410",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "693f54bdcdf63a12a95a562a1fae5226e2a8de280d2497604bf0f8c121e25c1c"
+  },
+  "id": "Kvv399bLZA74Mdr4",
+  "tags": []
+}

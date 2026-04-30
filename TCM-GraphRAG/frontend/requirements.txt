@@ -1,0 +1,11 @@
+# WebUI 前端框架 (指定兼容旧系统的稳定版)
+streamlit==1.22.0
+
+# 网络请求库
+requests
+
+# 解决旧版 Linux 系统的 OpenSSL 兼容性问题
+urllib3<2
+
+# (可选) 如果你把写入数据库的 kg_builder.py 也开源了，加上这个
+neo4j

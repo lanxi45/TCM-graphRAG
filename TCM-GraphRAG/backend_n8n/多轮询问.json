@@ -1,0 +1,198 @@
+{
+  "name": "多轮询问",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bb2916a4-4a11-4aa6-a284-b5d85a5e0d74",
+      "name": "When chat message received",
+      "webhookId": "d9363c22-fc17-43e2-a5dd-ab835db17bac"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.176.128:7474/db/neo4j/tx/commit",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"statements\": [\n    {\n      \"statement\": \"WITH $symptoms AS user_symptoms MATCH (d:Disease)-[:HAS_SYMPTOM]->(sym:Symptom) WHERE sym.name IN user_symptoms WITH d, count(sym) AS match_count ORDER BY match_count DESC LIMIT 3 MATCH (d)-[:HAS_SYMPTOM]->(all_sym:Symptom) RETURN d.name AS possible_disease, collect(all_sym.name) AS required_symptoms, match_count\",\n      \"parameters\": {\n        \"symptoms\": {{ $json.text }}\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        576,
+        0
+      ],
+      "id": "51a6357d-9aa3-4662-846d-077cac595921",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "2wL4seN9LgI2ASNn",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=用户最新回复：{{ $('When chat message received').item.json.chatInput }}\n请根据系统提示词中的分析逻辑，给出诊断结论或继续追问。",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=角色：中医问诊决策系统（主治医师）。\n患者主体：{{ $('症状提取LLM').item.json.text.subject }}\n患者已确认症状：{{ $('症状提取LLM').item.json.text.confirmed_symptoms }}\n图谱检索候选疾病及症状库：{{ JSON.stringify($('HTTP Request').item.json.results[0].data) }}\n\n执行绝对计算逻辑（按顺序）：\n1. 【记忆比对】：回顾你之前问过的问题，绝对不允许再次询问用户已经回答过“没有”的症状！绝对不允许重复提问意思相近的问题（如问了口干，就不许再问口渴）！\n2. 【主语锁定】：提问必须带上患者主体（如：“请问小孩是否...”），绝对不允许出现“您”和“小孩”混用的情况。\n3. 【决策分支】：\n   - 若图谱检索结果为空，直接回复：“目前提供的症状不足以匹配图谱库中的疾病，请描述更具体的症状。”\n   - 若候选疾病中有一个与患者确诊症状高度吻合，直接输出诊断结论与药方。\n   - 若存在多个候选疾病，挑选一个能区分这些疾病的【全新症状】向用户提问。一次只能问一个核心问题！\n\n输出约束：只输出诊断结论或追问的话语，语气要像专业沉稳的老中医。"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        800,
+        0
+      ],
+      "id": "bcab7131-a163-4b65-9bb3-4247eb403e69",
+      "name": "Basic LLM Chain1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        304,
+        224
+      ],
+      "id": "fadc6512-f90f-4492-97f8-48c048149eda",
+      "name": "DeepSeek Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "7MRdKdUVjH5JGvbm",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        880,
+        224
+      ],
+      "id": "b2cf31b2-94d7-4d8f-8b44-256148b74c66",
+      "name": "DeepSeek Chat Model1",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "7MRdKdUVjH5JGvbm",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=任务：分析用户的最新回复以及上下文，提取当前患者的【主体】和【确诊症状】。\n当前用户回复：{{ $('When chat message received').item.json.chatInput }}\n\n绝对约束（违反将导致系统崩溃）：\n1. 忽略用户回答“没有”、“无”的症状，绝对不能把否定回答当成症状提取！\n2. 严格输出 JSON 格式。\n\n输出格式必须为：\n{\n  \"subject\": \"患者身份，如：小孩、本人、老人。如果未提及，默认为本人\",\n  \"confirmed_symptoms\": [\"提取出的全部肯定症状的数组，如：发热、多梦\"]\n}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        224,
+        0
+      ],
+      "id": "440f1952-9e1f-4c9e-ac4c-4e4a5e807371",
+      "name": "症状提取LLM",
+      "alwaysOutputData": true,
+      "executeOnce": false
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "症状提取LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "症状提取LLM",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "症状提取LLM": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "97f0b83f-67e6-4036-bf9a-d008b35573e9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "693f54bdcdf63a12a95a562a1fae5226e2a8de280d2497604bf0f8c121e25c1c"
+  },
+  "id": "6mWg2EtMhHsyCO51",
+  "tags": []
+}

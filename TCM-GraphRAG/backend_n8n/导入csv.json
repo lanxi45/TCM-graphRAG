@@ -1,0 +1,170 @@
+{
+  "name": "导入csv",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "你是中医实体关系抽取程序。只输出文本中提到的治疗方剂名称（通常在“主之”二字之前）。不要返回任何标点、语气词或多余解释。如果文本中没有方剂名称，严格输出大写字母 NULL。",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=提取方剂名称：{{ $json.text }}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        672,
+        -224
+      ],
+      "id": "8570e122-fb2b-483d-81c2-e5053502eb52",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        752,
+        0
+      ],
+      "id": "474f4964-dbc4-4c3a-a609-24e2eaff2ad7",
+      "name": "DeepSeek Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "7MRdKdUVjH5JGvbm",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.176.128:7474/db/neo4j/tx/commit",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"statements\": [\n    {\n      \"statement\": \"MATCH (s:Syndrome) WHERE s.id = toInteger($s_id) MATCH (p:Prescription) WHERE trim(p.name) = trim($p_name) MERGE (s)-[:TREATED_BY]->(p)\",\n      \"parameters\": {\n        \"s_id\": {{ $('Code in JavaScript').item.json.id }},\n        \"p_name\": \"{{ $json.text }}\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1024,
+        -224
+      ],
+      "id": "39e9f0dd-c860-4f15-aa46-60ca38a06eb5",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "2wL4seN9LgI2ASNn",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.176.128:7474/db/neo4j/tx/commit",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"statements\": [\n    {\n      \"statement\": \"MATCH (s:Syndrome) RETURN s.id AS id, s.description AS text LIMIT 5\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        -224
+      ],
+      "id": "e980dbd2-d9a3-4785-9afa-431129c515d5",
+      "name": "HTTP Request1",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "2wL4seN9LgI2ASNn",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawData = $input.first().json.results[0].data;\nreturn rawData.map(item => {\n  return {\n    json: {\n      id: item.row[0],\n      text: item.row[1]\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -224
+      ],
+      "id": "e18640cf-0c78-47dc-b49d-143079dd9702",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "62d1d055-8563-4152-839d-0157600f0d74",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "693f54bdcdf63a12a95a562a1fae5226e2a8de280d2497604bf0f8c121e25c1c"
+  },
+  "id": "Mn2OSHvKmKeZO7nk",
+  "tags": []
+}
